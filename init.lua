@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 vim.g.netrw_preview = 1
 vim.g.netrw_liststyle = 3
@@ -198,6 +198,11 @@ vim.keymap.set('x', '<leader>y', [["+y]])
 vim.keymap.set('n', '<leader>pv', vim.cmd.Oil)
 vim.keymap.set('x', '<leader>c', [["_di]])
 vim.keymap.set('x', '<leader>d', [["_d]])
+vim.keymap.set('v', 'J', ":m '>+1<CR>gv=gv")
+vim.keymap.set('v', 'K', ":m '<-2<CR>gv=gv")
+vim.keymap.set('v', '<Tab>', '>gv')
+vim.keymap.set('v', '<S-Tab>', '<gv')
+vim.keymap.set('n', '<leader>mk', vim.cmd.MarkdownPreviewToggle)
 
 vim.keymap.set('n', '<leader><leader>', function()
   vim.cmd 'so'
@@ -378,15 +383,26 @@ require('lazy').setup({
 
       -- [[ Configure Telescope ]]
       -- See `:help telescope` and `:help telescope.setup()`
+
+      -- See `:help telescope.builtin`
+      local builtin = require 'telescope.builtin'
+      local action_state = require 'telescope.actions.state'
+      local actions = require 'telescope.actions'
       require('telescope').setup {
         -- You can put your default mappings / updates / etc. in here
         --  All the info you're looking for is in `:help telescope.setup()`
         --
-        -- defaults = {
-        --   mappings = {
-        --     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
-        --   },
-        -- },
+
+        defaults = {
+          mappings = {
+            i = {
+              ['<C-c>'] = false,
+            },
+            n = {
+              ['<C-c>'] = actions.close,
+            },
+          },
+        },
         -- pickers = {}
         extensions = {
           ['ui-select'] = {
@@ -398,18 +414,32 @@ require('lazy').setup({
       -- Enable Telescope extensions if they are installed
       pcall(require('telescope').load_extension, 'fzf')
       pcall(require('telescope').load_extension, 'ui-select')
-
-      -- See `:help telescope.builtin`
-      local builtin = require 'telescope.builtin'
       vim.keymap.set('n', '<leader>sh', builtin.help_tags, { desc = '[S]earch [H]elp' })
       vim.keymap.set('n', '<leader>sk', builtin.keymaps, { desc = '[S]earch [K]eymaps' })
       vim.keymap.set('n', '<leader>pf', builtin.find_files, { desc = '[P]search [F]iles' })
       vim.keymap.set('n', '<leader>sw', builtin.grep_string, { desc = '[S]earch current [W]ord' })
       vim.keymap.set('n', '<leader>pg', builtin.live_grep, { desc = '[P]search by [G]rep' })
-      vim.keymap.set('n', '<leader>pb', builtin.buffers, { desc = '[P]search [B]uffers' })
       vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
       vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
       vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
+      vim.keymap.set('i', '<C-c>', '<Esc>')
+      vim.keymap.set('n', '<leader>pb', function()
+        builtin.buffers({
+          initial_mode = 'insert',
+          attach_mappings = function(prompt_bufnr, map)
+            local delete_buf = function()
+              local current_picker = action_state.get_current_picker(prompt_bufnr)
+              current_picker:delete_selection(function(selection)
+                vim.api.nvim_buf_delete(selection.bufnr, { force = true })
+              end)
+            end
+
+            map('n', '<c-x>', delete_buf)
+
+            return true
+          end,
+        }, { desc = '[P]search [B]uffers', sort_lastused = true, sort_mru = true, theme = 'dropdown' })
+      end)
 
       -- Slightly advanced example of overriding default behavior and theme
       vim.keymap.set('n', '<leader>/', function()
@@ -443,13 +473,15 @@ require('lazy').setup({
         formatters_by_ft = {
           lua = { 'stylua' },
           -- Conform will run multiple formatters sequentially
-          python = { 'isort', 'black' },
+          python = { 'isort', 'ruff' },
           -- You can customize some of the format options for the filetype (:help conform.format)
           rust = { 'rustfmt', lsp_format = 'fallback' },
           -- Conform will run the first available formatter
           javascript = { 'prettierd', 'prettier', stop_after_first = true },
           typescript = { 'prettierd', 'prettier', stop_after_first = true },
           html = { 'prettierd', 'prettier', stop_after_first = true },
+          css = { 'prettierd', 'prettier', stop_after_first = true },
+          scss = { 'prettierd', 'prettier', stop_after_first = true },
           htmlangular = { 'prettierd', 'prettier', stop_after_first = true },
         },
       }
@@ -461,14 +493,15 @@ require('lazy').setup({
     -- change the command in the config to whatever the name of that colorscheme is.
     --
     -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
-    'olimorris/onedarkpro.nvim',
+    'uloco/bluloco.nvim',
     priority = 1000, -- Make sure to load this before all the other start plugins.
+    dependencies = { 'rktjmp/lush.nvim' },
     config = function()
       ---@diagnostic disable-next-line: missing-fields
       -- Load the colorscheme here.
       -- Like many other themes, this one has different styles, and you could load
       -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'onedark'
+      vim.cmd.colorscheme 'bluloco'
     end,
   },
 
@@ -563,6 +596,9 @@ require('lazy').setup({
           function(server_name)
             require('lspconfig')[server_name].setup {
               capabilities = capabilities,
+              on_attach = function(client, bufnr)
+                client.server_capabilities.semanticTokensProvider = nil
+              end,
             }
           end,
 
@@ -604,16 +640,50 @@ require('lazy').setup({
               'ngserver',
               '--stdio',
               '--tsProbeLocations',
-              '../..,?/node_modules',
+              'C:/Users/murilo.pereira/AppData/Roaming/npm/node_modules/typescript/lib',
               '--ngProbeLocations',
-              '../../@angular/language-server/node_modules,?/node_modules/@angular/language-server/node_modules,c:/Users/murilo.pereira/AppData/Local/nvim-data/mason/packages/angular-language-server/',
-              '--angularCoreVersion',
-              '',
+              'C:/Users/murilo.pereira/AppData/Roaming/npm/node_modules/@angular/language-server/bin/',
             },
           }),
           --
+          -- vim.lsp.config('tailwindcss', {
+          --   settings = {
+          --     tailwindCSS = {
+          --       classAttributes = {
+          --         'class',
+          --         'className',
+          --         'class:list',
+          --         'classList',
+          --         'ngClass',
+          --         'styleClass',
+          --       },
+          --     },
+          --   },
+          -- }),
+          --
         },
       }
+
+      vim.schedule(function()
+        local existing = vim.lsp.config['tailwindcss'] or {}
+        vim.lsp.config(
+          'tailwindcss',
+          vim.tbl_deep_extend('force', existing, {
+            settings = {
+              tailwindCSS = {
+                classAttributes = {
+                  'class',
+                  'className',
+                  'class:list',
+                  'classList',
+                  'ngClass',
+                  'styleClass',
+                },
+              },
+            },
+          })
+        )
+      end)
     end,
   },
 
@@ -912,7 +982,216 @@ require('lazy').setup({
       }
     end,
   },
+  {
+    'lukas-reineke/indent-blankline.nvim',
+    main = 'ibl',
+    ---@module "ibl"
+    ---@type ibl.config
+    opts = {},
+  },
+  {
+    'iamcco/markdown-preview.nvim',
+    cmd = { 'MarkdownPreviewToggle', 'MarkdownPreview', 'MarkdownPreviewStop' },
+    build = 'cd app && npm install',
+    init = function()
+      vim.g.mkdp_filetypes = { 'markdown' }
+    end,
+    ft = { 'markdown' },
+  },
+  {
+    'mfussenegger/nvim-dap',
+    config = function()
+      local dap = require 'dap'
+      local dap_widgets = require 'dap.ui.widgets'
+      vim.keymap.set('n', '<F5>', function()
+        dap.continue()
+      end)
+      vim.keymap.set('n', '<F10>', function()
+        dap.step_over()
+      end)
+      vim.keymap.set('n', '<F11>', function()
+        dap.step_into()
+      end)
+      vim.keymap.set('n', '<F12>', function()
+        dap.step_out()
+      end)
+      vim.keymap.set('n', '<Leader>b', function()
+        dap.toggle_breakpoint()
+      end)
+      vim.keymap.set('n', '<Leader>B', function()
+        dap.set_breakpoint()
+      end)
+      vim.keymap.set('n', '<Leader>lp', function()
+        dap.set_breakpoint(nil, nil, vim.fn.input 'Log point message: ')
+      end)
+      vim.keymap.set('n', '<Leader>dr', function()
+        dap.repl.open()
+      end)
+      vim.keymap.set('n', '<Leader>dl', function()
+        dap.run_last()
+      end)
+      vim.keymap.set({ 'n', 'v' }, '<Leader>dh', function()
+        dap_widgets.hover()
+      end)
+      vim.keymap.set({ 'n', 'v' }, '<Leader>dp', function()
+        dap_widgets.preview()
+      end)
+      vim.keymap.set('n', '<Leader>df', function()
+        local widgets = require 'dap.ui.widgets'
+        widgets.centered_float(widgets.frames)
+      end)
+      vim.keymap.set('n', '<Leader>ds', function()
+        local widgets = require 'dap.ui.widgets'
+        widgets.centered_float(widgets.scopes)
+      end)
+    end,
+  },
+  {
+    'rcarriga/nvim-dap-ui',
+    dependencies = { 'mfussenegger/nvim-dap', 'nvim-neotest/nvim-nio' },
+    config = function()
+      local dap, dapui = require 'dap', require 'dapui'
+      dapui.setup()
+      dapui.elements.watches.add(vim.fn.expand '<cword>')
+      dap.listeners.before.attach.dapui_config = function()
+        dapui.open()
+      end
+      dap.listeners.before.launch.dapui_config = function()
+        dapui.open()
+      end
+      dap.listeners.before.event_terminated.dapui_config = function()
+        dapui.close()
+      end
+      dap.listeners.before.event_exited.dapui_config = function()
+        dapui.close()
+      end
+    end,
+  },
+  {
+    'mfussenegger/nvim-dap-python',
+    config = function()
+      require('dap-python').setup 'python'
+    end,
+  },
+  {
+    'https://gitlab.com/itaranto/plantuml.nvim',
+    version = '*',
+    config = function()
+      local M = require 'plantuml.image'
+      function M.Renderer:new(options)
+        options = vim.tbl_deep_extend('force', {
+          prog = 'feh',
+          dark_mode = false, -- 👈 your fix here
+        }, options or {})
 
+        self.__index = self
+
+        return setmetatable({
+          prog = options.prog,
+          dark_mode = options.dark_mode,
+          format = options.format,
+          tmp_file = vim.fn.tempname() .. '.' .. options.format,
+          started = false,
+        }, self)
+      end
+      require('plantuml').setup {
+        renderer = {
+          type = 'image',
+          options = {
+            prog = 'sumatraPDF',
+            dark_mode = false,
+            format = 'png', -- Allowed values: nil, 'png', 'svg'.
+          },
+        },
+        render_on_write = true,
+      }
+    end,
+  },
+  {
+    'sindrets/diffview.nvim',
+    dependencies = {
+      { 'nvim-tree/nvim-web-devicons', opts = {} },
+    },
+    config = function()
+      local toggle = function()
+        local isOpen = false
+
+        return function()
+          if isOpen then
+            isOpen = not isOpen
+            vim.cmd.DiffviewClose()
+          else
+            isOpen = not isOpen
+            local pickers = require 'telescope.pickers'
+            local finders = require 'telescope.finders'
+            local conf = require('telescope.config').values
+            local actions = require 'telescope.actions'
+            local action_state = require 'telescope.actions.state'
+            pickers
+              .new({}, {
+                prompt_title = 'Choose an Option',
+                finder = finders.new_table {
+                  results = {
+                    {
+                      display = '1 - Current branch',
+                      action = function()
+                        vim.cmd.DiffviewOpen()
+                      end,
+                    },
+                    {
+                      display = '2 - Current file',
+                      action = function()
+                        vim.cmd.DiffviewOpen '%'
+                      end,
+                    },
+                    {
+                      display = '3 - Current branch with custom index (HEAD~, <commit_id>, etc...)',
+                      action = function()
+                        vim.api.nvim_feedkeys(':DiffviewOpen ', 'n', true)
+                      end,
+                    },
+                  },
+                  entry_maker = function(entry)
+                    return {
+                      value = entry,
+                      display = entry.display,
+                      ordinal = entry.display,
+                    }
+                  end,
+                },
+                sorter = conf.generic_sorter {},
+                attach_mappings = function(prompt_bufnr, map)
+                  actions.select_default:replace(function()
+                    actions.close(prompt_bufnr)
+
+                    local selection = action_state.get_selected_entry()
+                    selection.value.action()
+                  end)
+                  return true
+                end,
+              })
+              :find()
+          end
+        end
+      end
+      vim.keymap.set('n', '<leader>dd', toggle())
+    end,
+  },
+  {
+    'linux-cultist/venv-selector.nvim',
+    dependencies = {
+      'neovim/nvim-lspconfig',
+      { 'nvim-telescope/telescope.nvim', branch = '0.1.x', dependencies = { 'nvim-lua/plenary.nvim' } }, -- optional: you can also use fzf-lua, snacks, mini-pick instead.
+    },
+    ft = 'python', -- Load when opening Python files
+    keys = {
+      { '<leader>vs', '<cmd>VenvSelect<cr>' }, -- Open picker on keymap
+    },
+    opts = { -- this can be an empty lua table - just showing below for clarity.
+      search = {}, -- if you add your own searches, they go here.
+      options = {}, -- if you add plugin options, they go here.
+    },
+  },
   -- The following comments only work if you have downloaded the kickstart repo, not just copy pasted the
   -- init.lua. If you want these files, they are in the repository, so you can just download them and
   -- place them in the correct locations.
